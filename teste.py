@@ -4,6 +4,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import joblib
 import numpy as np
+from collections import deque
 
 # 1. Carregar o Modelo e o Encoder que você treinou
 model = joblib.load('modelo_libras.pkl')
@@ -17,6 +18,8 @@ detector = vision.HandLandmarker.create_from_options(options)
 cap = cv2.VideoCapture(0)
 
 print("Iniciando tradução... Pressione 'q' para sair.")
+
+buffer = deque(maxlen=10)  # guarda últimas 10 previsões
 
 while cap.isOpened():
     ret, frame = cap.read()
@@ -41,9 +44,18 @@ while cap.isOpened():
         label = label_encoder.inverse_transform(prediction)[0]
         prob = np.max(model.predict_proba([landmarks]))
 
+        # só adiciona no buffer se tiver confiança mínima
+        if prob > 0.7:
+            buffer.append(label)
+
+        if len(buffer) > 0:
+            final_label = max(set(buffer), key=buffer.count)
+        else:
+            final_label = ""
+
         # Mostrar o resultado na tela
-        cv2.putText(frame, f'{label} ({prob*100:.1f}%)', (10, 50), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(frame, f'{final_label} ({prob*100:.1f}%)', (10, 50), 
+            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
     cv2.imshow('Tradutor de LIBRAS - Kalleby', frame)
 
